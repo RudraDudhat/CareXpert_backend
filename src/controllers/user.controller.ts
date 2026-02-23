@@ -105,8 +105,7 @@ const signup = async (req: Request, res: any) => {
           email,
           password: hashedPassword,
           role,
-          profilePicture:
-            "https://res.cloudinary.com/de930by1y/image/upload/v1747403920/careXpert_profile_pictures/kxwsom57lcjamzpfjdod.jpg",
+          profilePicture: null,
         },
       });
 
@@ -231,8 +230,7 @@ const adminSignup = async (req: Request, res: any) => {
           email,
           password: hashedPassword,
           role: "ADMIN",
-          profilePicture:
-            "https://res.cloudinary.com/de930by1y/image/upload/v1747403920/careXpert_profile_pictures/kxwsom57lcjamzpfjdod.jpg",
+          profilePicture: null,
         },
       });
 
