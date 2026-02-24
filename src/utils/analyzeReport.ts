@@ -8,35 +8,44 @@ const aiRateLimiter = new RateLimiter({
 });
 
 // AI Service Configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-if (!GEMINI_API_KEY) {
-  console.warn('⚠️ GEMINI_API_KEY is not set - AI report analysis will not be available');
-}
+const getGeminiApiKey = () => {
+  const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not set in environment variables');
+  }
+  return GEMINI_API_KEY;
+};
 
-// Initialize Gemini AI (only if API key is available)
-const genAI = GEMINI_API_KEY ? new GoogleGenerativeAI(GEMINI_API_KEY as string) : null;
+// Initialize Gemini AI
+const getGenAI = () => {
+  const apiKey = getGeminiApiKey();
+  return new GoogleGenerativeAI(apiKey);
+};
 
-const model = genAI ? genAI.getGenerativeModel({
-  model: 'gemini-2.0-flash',
-  safetySettings: [
-    {
-      category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
-    },
-    {
-      category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
-    },
-    {
-      category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
-    },
-    {
-      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-      threshold: HarmBlockThreshold.BLOCK_NONE,
-    },
-  ],
-}) : null;
+const getModel = () => {
+  const genAI = getGenAI();
+  return genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    safetySettings: [
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+    ],
+  });
+};
 
 // In-memory cache for storing analysis results
 const analysisCache = new Map<string, ReportAnalysis>();
@@ -111,6 +120,8 @@ export const analyzeReport = async (text: string, useCache: boolean = true): Pro
   try {
     // Apply rate limiting
     await aiRateLimiter.removeTokens(1);
+
+    const model = getModel();
 
     const prompt = `
 You are an advanced medical report analysis assistant. You will receive text extracted from laboratory medical reports. Your task is to interpret the report, detect abnormal results, explain possible causes, and give appropriate recommendations.

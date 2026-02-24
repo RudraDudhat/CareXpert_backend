@@ -1,94 +1,132 @@
 import nodemailer from "nodemailer";
+import { ApiError } from "./ApiError";
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// Generate random verification token
+export const generateVerificationToken = (): string => {
+  return Math.random().toString(36).substring(2, 15) + 
+         Math.random().toString(36).substring(2, 15);
+};
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || "587"),
-  secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
+// Create transporter for sending emails
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || "587"),
+    secure: process.env.SMTP_PORT === "465", // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASSWORD,
+    },
+  });
+};
 
-interface EmailOptions {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-}
-
-export const sendEmail = async ({ to, subject, html, text }: EmailOptions) => {
+export const sendVerificationEmail = async (
+  email: string,
+  name: string,
+  token: string
+): Promise<void> => {
   try {
-    const fromName = process.env.SMTP_FROM_NAME || "CareXpert";
-    const fromEmail = process.env.SMTP_FROM_EMAIL || process.env.SMTP_USER;
+    const transporter = createTransporter();
+    
+    const verificationLink = `${process.env.EMAIL_VERIFICATION_URL}?token=${token}&email=${email}`;
 
-    const info = await transporter.sendMail({
-      from: `"${fromName}" <${fromEmail}>`,
-      to,
-      subject,
-      text: text || "This email contains important information from CareXpert.",
-      html,
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="margin: 0;">Welcome to CareXpert!</h1>
+        </div>
+        
+        <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 10px 10px;">
+          <p style="color: #333; font-size: 16px;">Hi ${name},</p>
+          
+          <p style="color: #666; font-size: 14px; line-height: 1.6;">
+            Thank you for registering with CareXpert. To activate your account and verify your email address, 
+            please click the button below:
+          </p>
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${verificationLink}" 
+               style="background-color: #667eea; color: white; padding: 12px 30px; text-decoration: none; 
+                      border-radius: 5px; display: inline-block; font-weight: bold;">
+              Verify Email Address
+            </a>
+          </div>
+          
+          <p style="color: #666; font-size: 13px; margin-top: 20px;">
+            Or copy and paste this link in your browser:
+          </p>
+          <p style="color: #667eea; font-size: 12px; word-break: break-all;">
+            ${verificationLink}
+          </p>
+          
+          <p style="color: #666; font-size: 13px; margin-top: 20px;">
+            This link will expire in 24 hours.
+          </p>
+          
+          <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+          
+          <p style="color: #999; font-size: 12px;">
+            If you didn't create this account, please ignore this email.
+          </p>
+        </div>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: "Verify Your CareXpert Email Address",
+      html: htmlContent,
     });
-    console.log("Email sent: %s", info.messageId);
-    return info;
+
   } catch (error) {
-    console.error("Error sending email:", error);
-    // We don't throw error to avoid blocking the API response as per requirements
-    return null;
+    console.error("Error sending verification email:", error);
+    throw new ApiError(500, "Failed to send verification email");
   }
 };
 
-// Templates
-export const welcomeEmailTemplate = (name: string) => `
-  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-    <h1 style="color: #4A90E2; text-align: center;">Welcome to CareXpert!</h1>
-    <p>Dear ${escapeHtml(name)},</p>
-    <p>Thank you for joining CareXpert. We are thrilled to have you on board.</p>
-    <p>Our platform connects patients with top doctors, making healthcare more accessible and efficient.</p>
-    <div style="text-align: center; margin: 20px 0;">
-      <a href="${process.env.FRONTEND_URL || '#'}" style="background-color: #4A90E2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Get Started</a>
-    </div>
-    <p>If you have any questions, feel free to reply to this email.</p>
-    <p>Best regards,<br>The CareXpert Team</p>
-  </div>
-`;
+export const sendWelcomeEmail = async (
+  email: string,
+  name: string
+): Promise<void> => {
+  try {
+    const transporter = createTransporter();
 
-export const appointmentStatusTemplate = (doctorName: string, status: string, date: string, time: string, reason?: string) => `
-  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-    <h2 style="color: ${status === 'CONFIRMED' ? '#27AE60' : '#E74C3C'}; text-align: center;">
-      Appointment ${status === 'CONFIRMED' ? 'Confirmed' : 'Declined'}
-    </h2>
-    <p>Your appointment with <strong>Dr. ${escapeHtml(doctorName)}</strong> has been <strong>${escapeHtml(status.toLowerCase())}</strong>.</p>
-    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-      <p><strong>Date:</strong> ${escapeHtml(date)}</p>
-      <p><strong>Time:</strong> ${escapeHtml(time)}</p>
-      ${reason ? `<p><strong>Note/Reason:</strong> ${escapeHtml(reason)}</p>` : ''}
-    </div>
-    <p>You can view more details in the CareXpert app.</p>
-    <p>Best regards,<br>The CareXpert Team</p>
-  </div>
-`;
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+          <h1 style="margin: 0;">Email Verified Successfully!</h1>
+        </div>
+        
+        <div style="padding: 30px; background-color: #f9f9f9; border-radius: 0 0 10px 10px;">
+          <p style="color: #333; font-size: 16px;">Hi ${name},</p>
+          
+          <p style="color: #666; font-size: 14px; line-height: 1.6;">
+            Your email has been successfully verified. Your CareXpert account is now active and ready to use!
+          </p>
+          
+          <p style="color: #666; font-size: 14px; line-height: 1.6;">
+            You can now log in and start using all the features of CareXpert.
+          </p>
+          
+          <hr style="border: none; border-top: 1px solid #ddd; margin: 20px 0;">
+          
+          <p style="color: #666; font-size: 13px;">
+            If you have any questions, feel free to contact our support team.
+          </p>
+        </div>
+      </div>
+    `;
 
-export const prescriptionTemplate = (doctorName: string, date: string) => `
-  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
-    <h2 style="color: #4A90E2; text-align: center;">Prescription Available</h2>
-    <p>A new prescription has been issued for your recent consultation with <strong>Dr. ${escapeHtml(doctorName)}</strong>.</p>
-    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
-      <p><strong>Date Issued:</strong> ${escapeHtml(date)}</p>
-    </div>
-    <p>Please log in to the CareXpert app to view and download your prescription.</p>
-    <div style="text-align: center; margin: 20px 0;">
-      <a href="${process.env.FRONTEND_URL || '#'}/patient/prescriptions" style="background-color: #4A90E2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">View Prescription</a>
-    </div>
-    <p>Best regards,<br>The CareXpert Team</p>
-  </div>
-`;
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM,
+      to: email,
+      subject: "Email Verified - Welcome to CareXpert!",
+      html: htmlContent,
+    });
+
+  } catch (error) {
+    console.error("Error sending welcome email:", error);
+    // Don't throw error here as account is already verified
+  }
+};
