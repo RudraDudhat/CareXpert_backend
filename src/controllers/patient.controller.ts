@@ -222,7 +222,7 @@ const bookAppointment = async (req: any, res: Response): Promise<void> => {
       const existingAppointment = await prisma.appointment.findFirst({
         where: {
           status: {
-            in: [AppointmentStatus.COMPLETED, AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED],
+            in: [AppointmentStatus.COMPLETED, AppointmentStatus.PENDING],
           },
           patientId: patient.id,
           timeSlot: {
