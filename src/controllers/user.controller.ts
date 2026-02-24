@@ -9,7 +9,7 @@ import { Request } from "express";
 import { hash } from "crypto";
 import { isValidUUID, validatePassword } from "../utils/helper";
 import { TimeSlotStatus, AppointmentStatus } from "@prisma/client";
-import { sendEmail, welcomeEmailTemplate } from "../utils/emailService";
+import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail } from "../utils/emailService";
 
 const generateToken = async (userId: string) => {
   try {
@@ -108,6 +108,8 @@ const signup = async (req: Request, res: any) => {
       return res.status(409).json(new ApiError(409, "User already exists"));
     }
     const hashedPassword = await bcrypt.hash(password, 10);
+    const verificationToken = generateVerificationToken();
+    const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const user = await tx.user.create({
@@ -116,7 +118,11 @@ const signup = async (req: Request, res: any) => {
           email,
           password: hashedPassword,
           role,
-          profilePicture: null,
+          isEmailVerified: false,
+          emailVerificationToken: verificationToken,
+          tokenExpiresAt: tokenExpiresAt,
+          profilePicture:
+            "https://res.cloudinary.com/de930by1y/image/upload/v1747403920/careXpert_profile_pictures/kxwsom57lcjamzpfjdod.jpg",
         },
       });
 
@@ -186,16 +192,171 @@ const signup = async (req: Request, res: any) => {
       return user;
     });
 
-    // Send welcome email asynchronously
-    sendEmail({
-      to: result.email,
-      subject: "Welcome to CareXpert",
-      html: welcomeEmailTemplate(result.name),
-    }).catch(err => console.error("Failed to send welcome email:", err));
+    // Send verification email
+    try {
+      await sendVerificationEmail(result.email, result.name, verificationToken);
+    } catch (emailError) {
+      console.error("Failed to send verification email:", emailError);
+      // Continue even if email fails, user account is created
+    }
+
+    return res
+      .status(201)
+      .json(new ApiResponse(
+        201, 
+        { 
+          user: { 
+            id: result.id, 
+            email: result.email, 
+            name: result.name,
+            isEmailVerified: result.isEmailVerified 
+          } 
+        }, 
+        "Signup successful! Please verify your email address."
+      ));
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json(new ApiError(500, "Internal server error", [err]));
+  }
+};
+
+// Email Verification endpoint
+const verifyEmail = async (req: Request, res: any) => {
+  try {
+    const { token, email } = req.query;
+
+    if (!token || !email) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Verification token and email are required"));
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: String(email) },
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json(new ApiError(404, "User not found"));
+    }
+
+    if (user.isEmailVerified) {
+      return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Email is already verified"));
+    }
+
+    if (user.emailVerificationToken !== String(token)) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Invalid verification token"));
+    }
+
+    if (user.tokenExpiresAt && new Date() > user.tokenExpiresAt) {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Verification token has expired"));
+    }
+
+    // Update user to verified
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isEmailVerified: true,
+        emailVerificationToken: null,
+        tokenExpiresAt: null,
+      },
+    });
+
+    // Send welcome email
+    try {
+      await sendWelcomeEmail(updatedUser.email, updatedUser.name);
+    } catch (emailError) {
+      console.error("Failed to send welcome email:", emailError);
+    }
 
     return res
       .status(200)
-      .json(new ApiResponse(200, { user: result }, "Signup successful"));
+      .json(new ApiResponse(
+        200, 
+        { 
+          user: { 
+            id: updatedUser.id, 
+            email: updatedUser.email, 
+            name: updatedUser.name,
+            isEmailVerified: updatedUser.isEmailVerified 
+          } 
+        }, 
+        "Email verified successfully! Your account is now active."
+      ));
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json(new ApiError(500, "Internal server error", [err]));
+  }
+};
+
+// Resend verification email endpoint
+const resendVerificationEmail = async (req: Request, res: any) => {
+  try {
+    const { email } = req.body;
+
+    if (!email || email.trim() === "") {
+      return res
+        .status(400)
+        .json(new ApiError(400, "Email is required"));
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json(new ApiError(404, "User not found"));
+    }
+
+    if (user.isEmailVerified) {
+      return res
+        .status(200)
+        .json(new ApiResponse(200, {}, "Email is already verified"));
+    }
+
+    // Generate new token
+    const verificationToken = generateVerificationToken();
+    const tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    // Update user with new token
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationToken: verificationToken,
+        tokenExpiresAt: tokenExpiresAt,
+      },
+    });
+
+    // Send verification email
+    try {
+      await sendVerificationEmail(user.email, user.name, verificationToken);
+    } catch (emailError) {
+      console.error("Failed to send verification email:", emailError);
+      return res
+        .status(500)
+        .json(new ApiError(500, "Failed to send verification email"));
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(
+        200, 
+        {}, 
+        "Verification email sent successfully"
+      ));
   } catch (err) {
     console.error(err);
     return res
@@ -326,6 +487,16 @@ const login = async (req: any, res: any) => {
       return res
         .status(401)
         .json(new ApiError(401, "Invalid username or password"));
+    }
+
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      return res
+        .status(403)
+        .json(new ApiError(
+          403, 
+          "Please verify your email before logging in. Check your inbox for verification link."
+        ));
     }
 
     const { accessToken, refreshToken } = await generateToken(user.id);
@@ -971,4 +1142,6 @@ export {
   getCommunityMembers,
   joinCommunity,
   leaveCommunity,
+  verifyEmail,
+  resendVerificationEmail,
 };
