@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { ApiError } from "../utils/ApiError";
-import { PrismaClient } from "@prisma/client";
+import prisma from "../utils/prismClient";
 import { UserInRequest } from "../utils/helper";
 import axios from "axios";
 import { ApiResponse } from "../utils/ApiResponse";
@@ -9,7 +9,7 @@ import { ApiResponse } from "../utils/ApiResponse";
 const isValidUUID = (value: string): boolean =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
-const prisma = new PrismaClient();
+// use shared prisma client from utils/prismClient
 
 // Controller to get messages for a room (city chat)
 export const getRoomMessages = async (req: Request, res: Response) => {
