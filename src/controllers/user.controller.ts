@@ -10,7 +10,6 @@ import { Prisma } from "@prisma/client";
 import { Request } from "express";
 import { hash } from "crypto";
 import { isValidUUID, validatePassword } from "../utils/helper";
-import { TimeSlotStatus, AppointmentStatus } from "@prisma/client";
 import { generateVerificationToken, sendVerificationEmail, sendWelcomeEmail } from "../utils/emailService";
 
 const generateToken = async (userId: string) => {
@@ -967,7 +966,7 @@ const getCommunityMembers = async (req: any, res: Response) => {
       return;
     }
 
-    const members = room.members.map((member) => ({
+    const members = room.members.map((member: any) => ({
       id: member.id,
       name: member.name,
       email: member.email,
