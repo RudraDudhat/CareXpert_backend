@@ -1859,7 +1859,7 @@ const getPrescriptionTemplate = async (
   res: Response
 ): Promise<any> => {
   const userId = (req as any).user?.id;
-  const { id } = req.params;
+  const id = req.params.id as string;
 
   try {
     // Get doctor
@@ -1918,7 +1918,7 @@ const updatePrescriptionTemplate = async (
   res: Response
 ): Promise<any> => {
   const userId = (req as any).user?.id;
-  const { id } = req.params;
+  const id = req.params.id as string;
   const { name, description, prescriptionText, tags, isActive } = req.body;
 
   try {
@@ -1997,7 +1997,7 @@ const deletePrescriptionTemplate = async (
   res: Response
 ): Promise<any> => {
   const userId = (req as any).user?.id;
-  const { id } = req.params;
+  const id = req.params.id as string;
   const { permanent } = req.query;
 
   try {
@@ -2073,7 +2073,7 @@ const usePrescriptionTemplate = async (
   res: Response
 ): Promise<any> => {
   const userId = (req as any).user?.id;
-  const { id } = req.params;
+  const id = req.params.id as string;
   const { patientId, customizedText, appointmentId } = req.body;
 
   try {
