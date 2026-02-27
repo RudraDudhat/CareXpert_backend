@@ -608,6 +608,11 @@ function drawHorizontalLine(
 const prescriptionPdf = async (req: Request, res: Response) => {
   try {
     const prescriptionId = (req as any).params.id as string;
+    const user = (req as any).user as UserInRequest | undefined;
+
+    if (!user) {
+      return res.status(401).json(new ApiError(401, "Unauthorized request"));
+    }
 
     if (!prescriptionId || !isValidUUID(prescriptionId)) {
       res.status(400).json(new ApiResponse(400, "Invalid prescription id"));
@@ -645,6 +650,24 @@ const prescriptionPdf = async (req: Request, res: Response) => {
     if (!prescription) {
       res.status(404).json(new ApiResponse(404, "Prescription not found"));
       return;
+    }
+
+    const isPatientOwner =
+      user.role === Role.PATIENT &&
+      !!user.patient?.id &&
+      user.patient.id === prescription.patientId;
+
+    const isDoctorIssuer =
+      user.role === Role.DOCTOR &&
+      !!user.doctor?.id &&
+      user.doctor.id === prescription.doctorId;
+
+    const isAdmin = user.role === Role.ADMIN;
+
+    if (!isPatientOwner && !isDoctorIssuer && !isAdmin) {
+      return res
+        .status(403)
+        .json(new ApiError(403, "Forbidden: You are not authorized to access this prescription"));
     }
 
     res.setHeader("Content-Type", "application/pdf");
