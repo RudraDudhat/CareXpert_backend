@@ -26,7 +26,7 @@ const searchDoctors = async (req: any, res: Response, next: NextFunction): Promi
 
   // Input validation
   if (!specialtyQuery && !locationQuery) {
-    return res
+    res
       .status(400)
       .json(
         new ApiError(
@@ -34,8 +34,8 @@ const searchDoctors = async (req: any, res: Response, next: NextFunction): Promi
           "At least one search parameter (specialty or location) is required"
         )
       );
+    return;
   }
-
   try {
     const cacheKey = `doctors:${specialtyQuery || 'all'}:${locationQuery || 'all'}`;
     const cached = await cacheService.get(cacheKey);
@@ -46,18 +46,24 @@ const searchDoctors = async (req: any, res: Response, next: NextFunction): Promi
 
     const doctors = await prisma.doctor.findMany({
       where: {
-        ...(specialtyQuery && {
-          specialty: {
-            contains: specialtyQuery as string,
-            mode: "insensitive"
-          }
-        }),
-        ...(locationQuery && {
-          clinicLocation: {
-            contains: locationQuery as string,
-            mode: "insensitive"
-          }
-        })
+        AND: [
+          specialtyQuery
+            ? {
+                specialty: {
+                  contains: specialtyQuery,
+                  mode: "insensitive",
+                },
+              }
+            : {},
+          locationQuery
+            ? {
+                clinicLocation: {
+                  contains: locationQuery,
+                  mode: "insensitive",
+                },
+              }
+            : {},
+        ],
       },
       select: {
         id: true,
