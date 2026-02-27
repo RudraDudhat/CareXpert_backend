@@ -716,6 +716,12 @@ const updatePatientProfile = async (req: any, res: Response): Promise<any> => {
 
 const updateDoctorProfile = async (req: any, res: Response) => {
   try {
+    // Verify the user is a doctor
+    if ((req as any).user?.role !== 'DOCTOR') {
+      res.status(403).json(new ApiError(403, "Unauthorized: Only doctors can update doctor profile"));
+      return;
+    }
+
     let id = (req as any).user?.doctor?.id;
     const { specialty, clinicLocation, experience, bio, name, education, languages } = req.body;
     const imageUrl = req.file?.path;
