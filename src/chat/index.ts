@@ -21,35 +21,36 @@ export async function setupChatSocket(io: Server): Promise<void> {
   // Two separate ioredis connections are required by the adapter (pub / sub).
   const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 
-  const pubClient = new Redis(redisUrl);
+  const pubClient = new Redis(redisUrl, {
+    maxRetriesPerRequest: 1,
+    enableOfflineQueue: false,
+    lazyConnect: true,
+  });
   const subClient = pubClient.duplicate();
 
-  pubClient.on("error", (err) =>
-    console.error("[Redis Adapter] pubClient error:", err)
-  );
-  subClient.on("error", (err) =>
-    console.error("[Redis Adapter] subClient error:", err)
-  );
+  // Suppress Redis connection errors
+  pubClient.on("error", () => {});
+  subClient.on("error", () => {});
 
   try {
-    await Promise.all([pubClient.ping(), subClient.ping()]);
+    await Promise.all([
+      pubClient.connect(),
+      subClient.connect(),
+      pubClient.ping(),
+      subClient.ping(),
+    ]);
     io.adapter(createAdapter(pubClient, subClient));
-    console.log("[Socket.IO] Redis adapter attached");
+    console.log("✓ Socket.IO Redis adapter enabled");
   } catch (err) {
-    console.error(
-      "[Socket.IO] Redis adapter disabled, falling back to in-memory adapter:",
-      err
+    console.log(
+      "ℹ Socket.IO using in-memory adapter (Redis unavailable)"
     );
     try {
       pubClient.disconnect();
-    } catch {
-      // ignore
-    }
+    } catch {}
     try {
       subClient.disconnect();
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   // ── /chat/room Namespace ──────────────────────────────────────────────────

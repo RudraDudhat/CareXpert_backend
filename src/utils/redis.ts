@@ -3,21 +3,29 @@ import { createClient } from 'redis';
 const redisClient = createClient({
   url: process.env.REDIS_URL || 'redis://localhost:6379',
   socket: {
-    reconnectStrategy: (retries) => {
-      if (retries > 3) return false; // stop reconnecting after 3 attempts
-      return Math.min(retries * 200, 1000);
-    },
+    reconnectStrategy: () => false, // Don't reconnect automatically
   },
 });
 
-redisClient.on('error', (err) => console.error('Redis Client Error:', err));
-redisClient.on('connect', () => console.log('Redis Client Connected'));
+let isConnected = false;
 
+// Suppress error logs if Redis is intentionally unavailable
+redisClient.on('error', () => {
+  // Silently fail - rate limiter will use memory fallback
+});
+
+redisClient.on('connect', () => {
+  isConnected = true;
+  console.log('✓ Redis Connected');
+});
+
+// Attempt connection silently
 (async () => {
   try {
     await redisClient.connect();
   } catch (error) {
-    console.error('Failed to connect to Redis:', error);
+    // Redis not available - app will use memory fallback
+    console.log('ℹ Redis unavailable - using memory fallback for rate limiting');
   }
 })();
 
