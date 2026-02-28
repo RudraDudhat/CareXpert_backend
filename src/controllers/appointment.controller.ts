@@ -112,6 +112,14 @@ export const addFollowUpDate = async (
     const updatedAppointment = await prisma.appointment.update({
       where: { id: appointmentId },
       data: updateData,
+      select: {
+        id: true,
+        followUpDate: true,
+        followUpSent: true,
+        followUpSentAt: true,
+        notes: true,
+        updatedAt: true,
+      },
     });
 
     res
@@ -181,7 +189,13 @@ export const getAppointmentsWithFollowUps = async (
 
     const appointments = await prisma.appointment.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        date: true,
+        followUpDate: true,
+        followUpSent: true,
+        followUpSentAt: true,
+        notes: true,
         patient: {
           select: {
             id: true,
@@ -248,15 +262,28 @@ export const sendFollowUpReminder = async (
         id: appointmentId,
         ...(doctorId ? { doctorId: doctorId } : {}),
       },
-      include: {
+      select: {
+        id: true,
+        date: true,
+        followUpDate: true,
+        notes: true,
         patient: {
-          include: {
-            user: true,
+          select: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
           },
         },
         doctor: {
-          include: {
-            user: true,
+          select: {
+            user: {
+              select: {
+                name: true,
+              },
+            },
           },
         },
       },
@@ -288,6 +315,11 @@ export const sendFollowUpReminder = async (
       data: {
         followUpSent: true,
         followUpSentAt: new Date(),
+      },
+      select: {
+        id: true,
+        followUpSent: true,
+        followUpSentAt: true,
       },
     });
 
@@ -342,7 +374,17 @@ export const getAppointmentDetails = async (
 
     const appointment = await prisma.appointment.findFirst({
       where,
-      include: {
+      select: {
+        id: true,
+        date: true,
+        time: true,
+        status: true,
+        appointmentType: true,
+        consultationFee: true,
+        notes: true,
+        followUpDate: true,
+        followUpSent: true,
+        followUpSentAt: true,
         patient: {
           select: {
             id: true,
