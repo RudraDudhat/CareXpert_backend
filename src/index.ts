@@ -7,6 +7,7 @@ import { Server } from "socket.io";
 import http from "http";
 import { setupChatSocket } from "./chat/index";
 import { notFoundHandler, errorHandler } from "./middlewares/errorHandler.middleware";
+import { startAppointmentReminderJob } from "./utils/appointmentReminderJob";
 
 dotenv.config();
 
@@ -56,6 +57,10 @@ setupChatSocket(io).catch((err) => {
   console.error("Failed to initialise chat socket:", err);
   // Server continues running even if socket setup fails
 });
+
+// Start appointment reminder job
+startAppointmentReminderJob();
+console.log("✅ Appointment reminder job started");
 
 process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
